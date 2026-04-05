@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Rust Weather Landscape — Premium</title>
+    <style>
+        :root {
+            --accent-color: #00d2ff;
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+            --text-color: #f5f5f7;
+            --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+        }
+
+        /* Weather Themes */
+        body.sunny { --bg-gradient: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%); }
+        body.rainy { --bg-gradient: linear-gradient(135deg, #4b6cb7 0%, #182848 100%); }
+        body.cloudy { --bg-gradient: linear-gradient(135deg, #757f9a 0%, #d7dde8 100%); --text-color: #1a1a1a; --glass-bg: rgba(0,0,0,0.05); --glass-border: rgba(0,0,0,0.1); }
+        body.night { --bg-gradient: linear-gradient(135deg, #000428 0%, #004e92 100%); }
+
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-gradient);
+            background-attachment: fixed;
+            color: var(--text-color);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            transition: background 1.5s ease;
+        }
+
+        /* Animated background atmosphere */
+        .atmosphere {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.05) 0%, transparent 80%);
+            z-index: 0;
+        }
+
+        .container {
+            width: 95vw;
+            max-width: 1300px;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 2rem;
+            position: relative;
+            z-index: 10;
+            padding: 2rem;
+        }
+
+        @media (max-width: 1000px) {
+            .container { grid-template-columns: 1fr; }
+        }
+
+        .main-view {
+            background: var(--glass-bg);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-radius: 32px;
+            border: 1px solid var(--glass-border);
+            padding: 2rem;
+            box-shadow: 0 40px 60px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .main-view:hover { transform: translateY(-5px); }
+
+        canvas {
+            width: 100%;
+            height: auto;
+            border-radius: 20px;
+            image-rendering: pixelated;
+            background: white;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.1);
+        }
+
+        .dashboard {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .metric-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 1.5rem;
+            border-radius: 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .metric-card:hover { 
+            background: rgba(255,255,255,0.15);
+            border-color: var(--accent-color);
+            transform: scale(1.02);
+        }
+
+        .metric-label { font-size: 0.8rem; opacity: 0.6; text-transform: uppercase; letter-spacing: 1px; }
+        .metric-value { font-size: 2rem; font-weight: 700; color: #fff; }
+        .metric-unit { font-size: 1rem; opacity: 0.6; margin-left: 4px; }
+
+        .location-header { margin-bottom: 2rem; }
+        .location-header h1 { font-size: 3rem; margin: 0; letter-spacing: -2px; }
+        .location-label { opacity: 0.7; font-size: 1.1rem; }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a;
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            z-index: 1000;
+            transition: opacity 0.8s ease;
+        }
+
+        .loader {
+            width: 60px; height: 60px;
+            border: 4px solid var(--accent-color);
+            border-bottom-color: transparent;
+            border-radius: 50%;
+            animation: rotate 1s linear infinite;
+        }
+
+        @keyframes rotate { 100% { transform: rotate(360deg); } }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body class="night">
+    <div class="atmosphere"></div>
+    
+    <div id="loader" class="loading-overlay">
+        <div class="loader"></div>
+        <p style="margin-top: 2rem; font-weight: 300;">Synchronizing Rust Atmosphere Engine...</p>
+    </div>
+
+    <div class="container">
+        <div class="main-view">
+            <header class="location-header">
+                <div id="location-label" class="location-label">Detecting Position...</div>
+                <h1 id="city-name">Atmosphere</h1>
+            </header>
+            
+            <canvas id="weather-canvas" width="800" height="400"></canvas>
+            
+            <p style="margin-top: 1.5rem; font-size: 0.9rem; opacity: 0.5;">Powered by Rust, WASM & Open-Meteo</p>
+        </div>
+
+        <div class="dashboard">
+            <div class="metric-card">
+                <span class="metric-label">Current Temperature</span>
+                <div>
+                    <span class="metric-value" id="temp-val">--</span>
+                    <span class="metric-unit">°C</span>
+                </div>
+            </div>
+            
+            <div class="metric-card">
+                <span class="metric-label">Atmospheric Pressure</span>
+                <div>
+                    <span class="metric-value" id="press-val">--</span>
+                    <span class="metric-unit">hPa</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <span class="metric-label">Wind Velocity</span>
+                <div>
+                    <span class="metric-value" id="wind-val">--</span>
+                    <span class="metric-unit">ms</span>
+                </div>
+            </div>
+
+            <div class="metric-card">
+                <span class="metric-label">Cloud Density</span>
+                <div>
+                    <span class="metric-value" id="cloud-val">--</span>
+                    <span class="metric-unit">%</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="./main.js"></script>
+</body>
+</html>
